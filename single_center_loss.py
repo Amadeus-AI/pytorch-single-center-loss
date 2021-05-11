@@ -19,6 +19,7 @@ class SingleCenterLoss(nn.Module):
         self.D = D
         self.margin = self.m * torch.sqrt(torch.tensor(self.D).float())
         self.use_gpu = use_gpu
+        self.l2loss = nn.MSELoss(reduction = 'none')
 
         if self.use_gpu:
             self.C = nn.Parameter(torch.randn(self.D).cuda())
@@ -32,15 +33,14 @@ class SingleCenterLoss(nn.Module):
             labels: ground truth labels with shape (batch_size).
         """
         batch_size = x.size(0)
-        dist_mat = torch.pow(x, 2).sum(dim=1, keepdim=True) + torch.pow(self.C, 2).sum().expand(batch_size, 1)
+        eud_mat = torch.sqrt(self.l2loss(x, self.C.expand(batch_size, self.C.size(0))).sum(dim=1, keepdim=True))
 
         labels = labels.unsqueeze(1)
 
         real_count = labels.sum()
-
-        dist_mat = torch.sqrt(dist_mat)
-        dist_real = (dist_mat * labels.float()).clamp(min=1e-12, max=1e+12).sum()
-        dist_fake = (dist_mat * (1 - labels.float())).clamp(min=1e-12, max=1e+12).sum()
+        
+        dist_real = (eud_mat * labels.float()).clamp(min=1e-12, max=1e+12).sum()
+        dist_fake = (eud_mat * (1 - labels.float())).clamp(min=1e-12, max=1e+12).sum()
 
         if real_count != 0:
             dist_real /= real_count
